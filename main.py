@@ -6,10 +6,10 @@ from typing import Optional
 from fastapi.responses import JSONResponse
 
 # NEO4J_URL = "bolt://localhost:7687"
-NEO4J_URL = "bolt://localhost:7687"
+NEO4J_URL = "neo4j+s://1688050e.databases.neo4j.io"
 NEO4J_USER = "neo4j"
 # NEO4J_PASSWORD = "Almas201"
-NEO4J_PASSWORD = "Almas201"
+NEO4J_PASSWORD = "neo4j"
 AUTH = (NEO4J_USER, NEO4J_PASSWORD)
 
 driver = GraphDatabase.driver(NEO4J_URL, auth=AUTH)
