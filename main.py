@@ -3,12 +3,13 @@ from neo4j import GraphDatabase
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
+from fastapi.responses import JSONResponse
 
 # NEO4J_URL = "bolt://localhost:7687"
-NEO4J_URL = "neo4j+s://1688050e.databases.neo4j.io"
+NEO4J_URL = "bolt://localhost:7687"
 NEO4J_USER = "neo4j"
 # NEO4J_PASSWORD = "Almas201"
-NEO4J_PASSWORD = "3eaKJvXAPX_qlTk0Nm5ckM_p6iV1_JeKtWxO-8-tuK8"
+NEO4J_PASSWORD = "Almas201"
 AUTH = (NEO4J_USER, NEO4J_PASSWORD)
 
 driver = GraphDatabase.driver(NEO4J_URL, auth=AUTH)
@@ -34,9 +35,9 @@ def close_driver():
 @app.get("/graph_data")
 def get_graph_data():
     query = """
-    MATCH (n)
-    OPTIONAL MATCH (n)-[r]->(m)
-    RETURN n, collect(r) AS relations, collect(m) AS targets
+        MATCH (n)
+        OPTIONAL MATCH (n)-[r]->(m)
+        RETURN n, collect(r) AS relations, collect(m) AS targets
     """
     try:
         with driver.session() as session:
@@ -154,7 +155,11 @@ def get_classes():
             if not classes:
                 return {"classes": []}  # Возвращаем пустой массив вместо ошибки
             
-            return {"classes": classes}
+            response = JSONResponse(content={"classes": classes})
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            return response
+        
 
     except Exception as e:
         return {"error": str(e), "classes": []}  # Ловим любую ошибку и возвращаем пустой список
@@ -190,8 +195,8 @@ def get_classes():
 @app.get("/subclasses/{class_name}")
 def get_subclasses(class_name: str):
     query = """
-    MATCH (c:Класс {name: $class_name})-[:MT]->(s:Подкласс)
-    RETURN s.name as name
+        MATCH (c:Класс {name: $class_name})-[:MT]->(s:Подкласс)
+        RETURN s.name as name
     """
     try:
         with driver.session() as session:
@@ -204,8 +209,8 @@ def get_subclasses(class_name: str):
 @app.get("/terms/{subclass_name}")
 def get_terms(subclass_name: str):
     query = """
-    MATCH (s:Подкласс {name: $subclass_name})-[:HAS_TERMIN]->(t:Термин)
-    RETURN t.name as name
+        MATCH (s:Подкласс {name: $subclass_name})-[:HAS_TERMIN]->(t:Термин)
+        RETURN t.name as name
     """
     try:
         with driver.session() as session:
@@ -215,12 +220,13 @@ def get_terms(subclass_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 class RelationRequest(BaseModel):
     term1: str
     term2: str
     relation_type: str
 
-@app.post("/create_relation")
+@app.post("/create_relation_between_terms")
 def create_relation(relation_data: dict):
     term1 = relation_data.get("term1")
     term2 = relation_data.get("term2")
@@ -231,13 +237,13 @@ def create_relation(relation_data: dict):
     print("Термин 2:", term2)
     print("Тип отношения:", relation_type)  # Посмотрим, что приходит на сервер
 
-    if relation_type not in ["NT", "BT", "RT", "UF", "SN", "MT"]:
+    if relation_type not in ["NT", "BT", "RT", "UF", "MT"]:
         return {"error": "Неверный тип отношения"}
     
     query = f"""
-    MATCH (t1:Термин {{name: $term1}}), (t2:Термин {{name: $term2}})
-    MERGE (t1)-[:{relation_type}]->(t2)
-    MERGE (t2)-[:{relation_type}]->(t1)
+        MATCH (t1:Термин {{name: $term1}}), (t2:Термин {{name: $term2}})
+        MERGE (t1)-[:{relation_type}]->(t2)
+        MERGE (t2)-[:{relation_type}]->(t1)
     """
     try:
         with driver.session() as session:
@@ -248,15 +254,113 @@ def create_relation(relation_data: dict):
 
 
 
+@app.delete("/delete_all_data")
+def delete_all_data():
+    query = "MATCH (n) DETACH DELETE n"
+    try:
+        with driver.session() as session:
+            session.run(query)
+        return {"message": "Все данные успешно удалены"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.delete("/delete_node")
+def delete_node(node: dict):
+    node_type = node.get("type")
+    node_name = node.get("name")
+
+    print(node_type, node_name)
+
+    if node_type == 'class':
+        node_type = 'Класс'
+    elif node_type == 'subclass':   
+        node_type = 'Подкласс'
+    elif node_type == 'term':
+        node_type = 'Термин'
+    elif node_type == 'translate':
+        node_type = 'Перевод'
+    
+    if not node_type or not node_name:
+        return {"error": "Не указан тип или имя узла"}
+
+    query = ""
+
+    try:
+        with driver.session() as session:
+            if node_type == "Класс":
+                query = f"""
+                    MATCH (a:Класс {{name: $node_name}})
+                    OPTIONAL MATCH (a)-[:MT]->(b:Подкласс)
+                    OPTIONAL MATCH (b)-[:HAS_TERMIN]->(c:Термин)
+                    OPTIONAL MATCH (a)-[:LE_KAZ|LE_ENG]->(d:Перевод)   
+                    OPTIONAL MATCH (b)-[:LE_KAZ|LE_ENG]->(e:Перевод)
+                    OPTIONAL MATCH (c)-[:LE_KAZ|LE_ENG]->(f:Перевод)
+                    DETACH DELETE a, b, c, d, e, f
+                """
+            elif node_type == "Подкласс":
+                query = f"""
+                    MATCH (b:Подкласс {{name: $node_name}})
+                    OPTIONAL MATCH (b)-[:HAS_TERMIN]->(c:Термин)
+                    OPTIONAL MATCH (b)-[:LE_KAZ|LE_ENG]->(d:Перевод)
+                    OPTIONAL MATCH (c)-[:LE_KAZ|LE_ENG]->(e:Перевод)
+                    DETACH DELETE b, c, d, e
+                """
+            elif node_type == "Термин":
+                query = f"""
+                    MATCH (c:Термин {{name: $node_name}})
+                    OPTIONAL MATCH (c)-[:LE_KAZ|LE_ENG]->(d:Перевод)
+                    DETACH DELETE c, d 
+                """
+            else:
+                return {"error": "Неизвестный тип узла"}
+            session.run(query, node_name=node_name)
+        return {"success": True, "message": f"{node_type} '{node_name}' успешно удален"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
-'''
-index.html: 
+class SynonymRequest(BaseModel):
+    term: str
+    synonym_ru: str
+    synonym_kz: Optional[str] = None
+    synonym_en: Optional[str] = None
+    uf_type: str  # "UF_1" или "UF_2"
 
-+ обработка ошибок:
-    - проверка одинаковых узлов при добавлении, если есть то выдать ошибку
-    - добавить рядом поля индиктор загрузки при проверки добавлении
+@app.post("/add_synonym")
+def add_synonym(data: SynonymRequest):
+    try:
+        with driver.session() as session:
+            # Создать вершину синонима
+            session.run(
+                "MERGE (s:Синоним {name: $synonym_ru, lang: 'ru'})",
+                synonym_ru=data.synonym_ru
+            )
+            # Переводы
+            if data.synonym_kz:
+                session.run(
+                    "MERGE (kz:Перевод {name: $synonym_kz, lang: 'kz'}) "
+                    "WITH kz "
+                    "MATCH (s:Синоним {name: $synonym_ru, lang: 'ru'}) "
+                    "MERGE (s)-[:LE_KAZ]->(kz)",
+                    synonym_ru=data.synonym_ru, synonym_kz=data.synonym_kz
+                )
+            if data.synonym_en:
+                session.run(
+                    "MERGE (en:Перевод {name: $synonym_en, lang: 'en'}) "
+                    "WITH en "
+                    "MATCH (s:Синоним {name: $synonym_ru, lang: 'ru'}) "
+                    "MERGE (s)-[:LE_ENG]->(en)",
+                    synonym_ru=data.synonym_ru, synonym_en=data.synonym_en
+                )
+            # Связь UF-1 или UF-2
+            session.run(
+                f"MATCH (t:Термин {{name: $term}}), (s:Синоним {{name: $synonym_ru, lang: 'ru'}}) "
+                f"MERGE (t)-[:{data.uf_type}]->(s)",
+                term=data.term, synonym_ru=data.synonym_ru
+            )
+        return {"success": True, "message": "Синоним успешно добавлен"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-'''
 
