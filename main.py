@@ -8,8 +8,8 @@ from fastapi.responses import JSONResponse
 # NEO4J_URL = "bolt://localhost:7687"
 NEO4J_URL = "neo4j+s://1688050e.databases.neo4j.io"
 NEO4J_USER = "neo4j"
+# NEO4J_PASSWORD = "Almas201"
 NEO4J_PASSWORD = "3eaKJvXAPX_qlTk0Nm5ckM_p6iV1_JeKtWxO-8-tuK8"
-# NEO4J_PASSWORD = "neo4j"
 AUTH = (NEO4J_USER, NEO4J_PASSWORD)
 
 driver = GraphDatabase.driver(NEO4J_URL, auth=AUTH)
@@ -310,7 +310,9 @@ def delete_node(node: dict):
                 query = f"""
                     MATCH (c:Термин {{name: $node_name}})
                     OPTIONAL MATCH (c)-[:LE_KAZ|LE_ENG]->(d:Перевод)
-                    DETACH DELETE c, d 
+                    OPTIONAL MATCH (c)-[r:UF_1|UF_2]->(e:Синоним)
+                    OPTIONAL MATCH (e)-[l:LE_KAZ|LE_ENG]->(f:Перевод)
+                    DETACH DELETE c, d, r, e, l, f
                 """
             else:
                 return {"error": "Неизвестный тип узла"}
