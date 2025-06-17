@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 # NEO4J_URL = "bolt://localhost:7687"
 NEO4J_URL = "neo4j+s://1688050e.databases.neo4j.io"
 NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "Almas201"
+NEO4J_PASSWORD = "3eaKJvXAPX_qlTk0Nm5ckM_p6iV1_JeKtWxO-8-tuK8"
 # NEO4J_PASSWORD = "neo4j"
 AUTH = (NEO4J_USER, NEO4J_PASSWORD)
 
