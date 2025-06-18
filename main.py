@@ -300,11 +300,13 @@ def delete_node(node: dict):
                 """
             elif node_type == "Подкласс":
                 query = f"""
-                    MATCH (b:Подкласс {{name: $node_name}})
-                    OPTIONAL MATCH (b)-[:HAS_TERMIN]->(c:Термин)
-                    OPTIONAL MATCH (b)-[:LE_KAZ|LE_ENG]->(d:Перевод)
-                    OPTIONAL MATCH (c)-[:LE_KAZ|LE_ENG]->(e:Перевод)
-                    DETACH DELETE b, c, d, e
+                        MATCH (b:Подкласс {{name: $node_name}})
+                        OPTIONAL MATCH (b)-[:HAS_TERMIN]->(c:Термин)
+                        OPTIONAL MATCH (b)-[:LE_KAZ|LE_ENG]->(d:Перевод)
+                        OPTIONAL MATCH (c)-[:LE_KAZ|LE_ENG]->(e:Перевод)
+                        OPTIONAL MATCH (c)-[r:UF_1|UF_2]->(s:Синоним)
+                        OPTIONAL MATCH (s)-[l:LE_KAZ|LE_ENG]->(f:Перевод)
+                        DETACH DELETE b, c, d, e, r, s, l, f
                 """
             elif node_type == "Термин":
                 query = f"""
